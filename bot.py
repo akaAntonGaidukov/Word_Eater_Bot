@@ -27,15 +27,21 @@ bot = Bot(token=API_TOKEN,parse_mode="HTML")
 dp = Dispatcher(bot)
 
 # Functions 
-def translate_ru(wyw_text):
+def translate_ru(wyw_text, translate_mode="All"):
+
     from_language, to_language = 'en', 'ru'
-    g_trans = tss.google(wyw_text, from_language, to_language).lower().split(";")
-    y_trans = tss.alibaba(wyw_text, from_language, to_language).lower().split(";")
-    b_trans = tss.bing(wyw_text, from_language, to_language).lower().split(";")
-    output=[]
-    for i in range(len(g_trans)):
-        x = set([g_trans[i].strip(),y_trans[i].strip(),b_trans[i].strip()])
-        output.append(x)
+
+    if translate_mode == "All":
+        g_trans = tss.google(wyw_text, from_language, to_language).lower().split(";")
+        y_trans = tss.alibaba(wyw_text, from_language, to_language).lower().split(";")
+        b_trans = tss.bing(wyw_text, from_language, to_language).lower().split(";")
+        output=[]
+        for i in range(len(g_trans)):
+            x = set([g_trans[i].strip(),y_trans[i].strip(),b_trans[i].strip()])
+            output.append(x)
+    
+    if translate_mode == "G":
+        output = tss.google(wyw_text, from_language, to_language).lower().split(";")
 
     return output
 
@@ -78,9 +84,8 @@ def keybord_answ(variants, special_word,LIST_NAME):
     
     variants = variants[:4] #can controll number of words in the future
     variants = [i.strip() for i in [*dict(variants).keys()]]
-    print(variants)
     translated = translate_ru(str(" ; ".join(variants)))
-    print(translated)
+
     rw = 1
     ikm = InlineKeyboardMarkup(row_width=rw)
 
@@ -242,7 +247,7 @@ async def send_result(callback: types.CallbackQuery):
             answer=False,
             SHARED=True
             )
-            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - {translate_ru(correct)}")
+            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{str(' , '.join(translate_ru(correct)[0]))}</b>")
         await bot.send_message(
             chat_id = callback.from_user.id,
             text="Еще?",
@@ -264,7 +269,7 @@ async def send_result(callback: types.CallbackQuery):
             LIST_NAME=LIST_NAME,
             word=correct,
             answer=False)
-            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - {translate_ru(correct)}")
+            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{str(' , '.join(translate_ru(correct)[0]))}</b>")
         if db.check_avg_weight(callback.from_user.id) == 1:
             await bot.send_message(
             chat_id = callback.from_user.id,
