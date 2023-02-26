@@ -13,11 +13,16 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,InputMediaPhoto
 
 # Methods
+import aspose.words as aw
+from PIL import Image
+import io
 import config
 import db
 import translators as ts
 import translators.server as tss
 API_TOKEN = config.TG_TOKEN
+
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,9 +32,22 @@ bot = Bot(token=API_TOKEN,parse_mode="HTML")
 dp = Dispatcher(bot)
 
 # Functions 
-def translate_ru(wyw_text, translate_mode="All"):
+def translate_ru(wyw_text, translate_mode="FAST"):
 
     from_language, to_language = 'en', 'ru'
+    if translate_mode == "FAST":
+        trans = tss.google(wyw_text, from_language, to_language,is_detail_result = True)
+        output = []
+        for n in range(4):
+            da = []
+            translations =  trans["data"][1][0][0][5][n][4]
+            for i in translations:
+                for x in i:
+                    if type(x) == str:
+                        da.append(x.replace(";","").strip().lower())
+            output.append(da)
+
+        output
 
     if translate_mode == "All":
         g_trans = tss.google(wyw_text, from_language, to_language).lower().split(";")
@@ -41,7 +59,7 @@ def translate_ru(wyw_text, translate_mode="All"):
             output.append(x)
     
     if translate_mode == "G":
-        output = tss.google(wyw_text, from_language, to_language).lower().split(";")
+        output = tss.google(wyw_text, from_language, to_language).lower()
 
     return output
 
@@ -84,7 +102,7 @@ def keybord_answ(variants, special_word,LIST_NAME):
     
     variants = variants[:4] #can controll number of words in the future
     variants = [i.strip() for i in [*dict(variants).keys()]]
-    translated = translate_ru(str(" ; ".join(variants)))
+    translated = translate_ru(str(" ; ".join(variants)),translate_mode="FAST")
 
     rw = 1
     ikm = InlineKeyboardMarkup(row_width=rw)
@@ -247,7 +265,7 @@ async def send_result(callback: types.CallbackQuery):
             answer=False,
             SHARED=True
             )
-            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{str(' , '.join(translate_ru(correct)[0]))}</b>")
+            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{translate_ru(correct,translate_mode='G')}</b>")
         await bot.send_message(
             chat_id = callback.from_user.id,
             text="Еще?",
@@ -269,7 +287,7 @@ async def send_result(callback: types.CallbackQuery):
             LIST_NAME=LIST_NAME,
             word=correct,
             answer=False)
-            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{str(' , '.join(translate_ru(correct)[0]))}</b>")
+            await bot.send_message(chat_id=callback.from_user.id,text=f"Не правильный ответ!\n Правильный ответ - <b>{(translate_ru(correct,translate_mode='G'))}</b>")
         if db.check_avg_weight(callback.from_user.id) == 1:
             await bot.send_message(
             chat_id = callback.from_user.id,
@@ -302,6 +320,24 @@ async def not_a_comand(message: types.Message):
 
     else:
         await message.answer(f'Извини, я не умею поддерживать беседу...')
+
+    
+@dp.message_handler(content_types=['photo', 'document'])
+async def photo_or_doc_handler(message: types.Message):
+    file_in_io = io.BytesIO()
+
+    if message.content_type == 'photo':
+        await bot.send_message(chat_id=message.from_user.id,text="Я не хочу смотреть твои дикпики")
+        await message.photo[-1].download(destination_file=file_in_io)
+        img_exp = Image.open(file_in_io)
+        img_exp.save('my.png')
+
+    elif message.content_type == 'document':
+        await message.document.download(destination_file="temp.epub")
+    
+
+
+
 
 
 

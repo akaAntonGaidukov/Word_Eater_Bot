@@ -144,6 +144,6 @@ def check_avg_weight(TG_CHAT):
 def add_to_a_shared_list(TG_CHAT,LIST_NAME):
     shared_list = WordListTable.find_one({"List_Name":LIST_NAME})
 
-    shared_list["Student"].append(TG_CHAT)
+    shared_list["Student"] = list(set(shared_list["Student"]).append(TG_CHAT))
 
     WordListTable.update_one({"List_Name":LIST_NAME},{"$set":shared_list})
