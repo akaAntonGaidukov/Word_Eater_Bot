@@ -1,40 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-import translators as ts
-import translators.server as tss
 
-def translate_ru(wyw_text, translate_mode="FAST",k=4):
-    
-
-    from_language, to_language = 'en', 'ru'
-    if translate_mode == "FAST":
-        trans = tss.google(wyw_text, from_language, to_language,is_detail_result = True)
-        output = []
-
-        for n in range(k):
-            da = []
-            translations =  trans["data"][1][0][0][5][n][4]
-            for i in translations:
-                for x in i:
-                    if type(x) == str:
-                        da.append(x.replace(";","").strip().lower())
-            output.append(set(da))
-
-        output
-
-    if translate_mode == "All":
-        g_trans = tss.google(wyw_text, from_language, to_language).lower().split(";")
-        y_trans = tss.alibaba(wyw_text, from_language, to_language).lower().split(";")
-        b_trans = tss.bing(wyw_text, from_language, to_language).lower().split(";")
-        output=[]
-        for i in range(len(g_trans)):
-            x = set([g_trans[i].strip(),y_trans[i].strip(),b_trans[i].strip()])
-            output.append(x)
-    
-    if translate_mode == "G":
-        output = tss.google(wyw_text, from_language, to_language).lower()
-        return output
-    return output
-
+def clear_i():
+    return InlineKeyboardMarkup([])
 
 def Key_Board(keys_calls):
     rkm = ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True)
@@ -102,3 +69,89 @@ def keybord_answ(variants, special_word,LIST_NAME):
         ikm.add(ib4)
 
     return ikm
+
+def key_short_options(opt1={"Buttname":"Buttcallback"},opt2={"Buttname":"Buttcallback"}):
+    sikm = InlineKeyboardMarkup(row_width=2)
+    
+    sib1 = InlineKeyboardButton(text=list(opt1.keys())[0],
+                               callback_data=list(opt1.values())[0])
+    sib2 = InlineKeyboardButton(text=list(opt2.keys())[0],
+                               callback_data=list(opt2.values())[0])
+    sikm.add(sib1,sib2)
+
+    return sikm
+
+def main_menu(LIST_NAME="KB",preset=None,
+        top_row = {
+    "bt1":["Мои списки","LIST"],
+    "bt2":["Моя Статистика","STAT"]
+        },
+        middle_row = {
+    "bt1":["Помощь","HELP"],
+    "bt2":["Продолжить изучение","CONTINUE"]
+        },
+        bot_row = {
+    "bt1":["Добавить книгу","ADDBOOK"],
+    "bt2":["Добавить список","ADDLIST"]
+        },
+        ):
+    
+    #PRESETS#
+
+    #list menu
+    if preset == "List":
+        top_row = {
+            "bt1":["Начать список","START_LIST"],
+            "bt2":["Отчет по словам","WORD_STAT"]
+            }
+        middle_row = {
+            "bt1":["Удалить список","DELETE_LIST"],
+            "bt2":["Совместить списки","MERGE"]
+            }
+        bot_row = {
+            "bt1":["Переименовать","RENAME"],
+            "bt2":["НАЗАД","MENU"]
+            }
+    
+
+    
+    mikm = InlineKeyboardMarkup(row_width=2)
+    
+    mikb1 = InlineKeyboardButton(
+        text=top_row["bt1"][0],
+        callback_data=top_row["bt1"][1]+f";{LIST_NAME};"+top_row["bt1"][1]
+    )
+
+    mikb2 = InlineKeyboardButton(
+        text=top_row["bt2"][0],
+        callback_data=top_row["bt2"][1]+f";{LIST_NAME};"+top_row["bt2"][1]
+    )
+    mikm.add(mikb1,mikb2)
+
+    mikb3 = InlineKeyboardButton(
+        text=middle_row["bt1"][0],
+        callback_data=middle_row["bt1"][1]+f";{LIST_NAME};"+middle_row["bt1"][1]
+    )
+
+    mikb4 = InlineKeyboardButton(
+        text=middle_row["bt2"][0],
+        callback_data=middle_row["bt2"][1]+f";{LIST_NAME};"+middle_row["bt2"][1]
+    )
+    mikm.add(mikb3,mikb4)
+
+    mikb5 = InlineKeyboardButton(
+        text=bot_row["bt1"][0],
+        callback_data=bot_row["bt1"][1]+f";{LIST_NAME};"+bot_row["bt1"][1]
+    )
+
+    mikb6 = InlineKeyboardButton(
+        text=bot_row["bt2"][0],
+        callback_data=bot_row["bt2"][1]+f";{LIST_NAME};"+bot_row["bt2"][1]
+    )
+    mikm.add(mikb5,mikb6)
+    
+
+    return mikm
+
+    
+

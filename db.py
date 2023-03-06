@@ -8,7 +8,12 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 from bson import ObjectId
-import key_boards
+import asyncio
+from prettytable import PrettyTable
+from PIL import Image
+import io
+
+import atranslator
 #Connnection
 
 con = f"mongodb+srv://bluebear:{config.mongo_pass}@cluster0.arneqvb.mongodb.net/?retryWrites=true&w=majority"
@@ -18,6 +23,38 @@ db = client.get_database("WordEater")
 UserTable = db.UserTable
 WordListTable = db.WordListTable
 
+#Styles
+sns_tg = {'figure.facecolor': '#0e1621',
+ 'axes.labelcolor': '#f5f5f5',
+ 'xtick.direction': 'out',
+ 'ytick.direction': 'out',
+ 'xtick.color': '#f5f5f5',
+ 'ytick.color': '#0e1621',
+ 'axes.axisbelow': True,
+ 'grid.linestyle': '-',
+ 'text.color': '#f5f5f5',
+ 'font.family': ['sans-serif'],
+ 'font.sans-serif': ['Arial',
+  'DejaVu Sans',
+  'Liberation Sans',
+  'Bitstream Vera Sans',
+  'sans-serif'],
+ 'lines.solid_capstyle': 'round',
+ 'patch.edgecolor': '#182533',
+ 'patch.force_edgecolor': False,
+ 'image.cmap': 'rocket',
+ 'xtick.top': False,
+ 'ytick.right': False,
+ 'axes.grid': False,
+ 'axes.facecolor': '#182533',
+ 'axes.edgecolor': '#182533',
+ 'grid.color': '#182533',
+ 'axes.spines.left': True,
+ 'axes.spines.bottom': True,
+ 'axes.spines.right': True,
+ 'axes.spines.top': True,
+ 'xtick.bottom': False,
+ 'ytick.left': False}
 
 def new_user(TG_CHAT_ID,TG_NAME):
     time_now = datetime.datetime.utcnow()
@@ -41,22 +78,13 @@ def new_list(TG_CHAT,LIST_NAME,WORD_LIST=[],SHARED=False):
         WORD_LIST = [*shared_list["words"]]
         LIST_NAME = shared_list["List_Name"]
         translated = [shared_list["words"][i]["translation"] for i in shared_list["words"]]
-    if SHARED == False:
-    
-        translated =[]
-        for i in WORD_LIST:
-            try:
-                translated.append(list(key_boards.translate_ru(i,k=1)[0]))
-            except Exception as err:
-                translated.append("BAD_WORD_REMOVE_6262626d73")
-                print([err,i])
-
-
+    if SHARED == False:   
+        translated =atranslator.batch_translate(WORD_LIST)
     Word_lists_table = {
     "List_Name": LIST_NAME,
     "Student" : TG_CHAT,
     "Date_of_creation" : time_now,
-    "words" : {WORD_LIST[i].strip() : {'weight':1,'count':0,'translation':list(translated[i]) ,'used_in':[]} for i in range(len(WORD_LIST))},
+    "words" : {WORD_LIST[i].strip() : {'weight':1,'count':0,'translation':translated[i] ,'used_in':[]} for i in range(len(WORD_LIST))},
     "Last_used_in" : time_now
 }
     WordListTable.insert_one(Word_lists_table)
@@ -111,6 +139,7 @@ def word_update(TG_CHAT,LIST_NAME,word,answer,SHARED=False):
 
         table_to_update = UserTable.find_one({'uid': TG_CHAT})
         table_to_update["Date_last_call"] = time_now
+        table_to_update["Last_list"] = LIST_NAME
         all_books = list(WordListTable.find({'Student': TG_CHAT}))
         total_words = [i["words"] for i in all_books]
         table_to_update["Words_avg_weight"] = np.mean([i['weight'] for i in dict(ChainMap(*total_words)).values()])
@@ -122,9 +151,10 @@ def add_to_list(TG_CHAT,LIST_NAME,WORDS):
 
 
     Wordsinlist = WordListTable.find_one({'Student': TG_CHAT,"List_Name":LIST_NAME})
-    
-    for i in WORDS:
-        Wordsinlist["words"][i]={'weight': 1, 'count': 0}
+
+    translated = atranslator.batch_translate(WORDS)
+    for k, w in enumerate(WORDS):
+        Wordsinlist["words"][w.strip()]={'weight': 1, 'count': 0,'translation':translated[k] ,'used_in':[]}
     
     Wordsinlist["Last_used_in"] = time_now
     WordListTable.update_one({"List_Name":LIST_NAME,"Student":TG_CHAT},{"$set":Wordsinlist})
@@ -137,6 +167,18 @@ def add_to_list(TG_CHAT,LIST_NAME,WORDS):
     table_to_update["Words_avg_weight"] = np.mean([i['weight'] for i in dict(ChainMap(*total_words)).values()])
     
     UserTable.update_one({'uid': TG_CHAT}, {'$set': table_to_update})
+
+def merge_lists(TG_CHAT,LIST_NAME1,LIST_NAME2,dl=False):
+    table1 = WordListTable.find_one({"Student":TG_CHAT,"List_Name":LIST_NAME1})
+    words2 = WordListTable.find_one({"Student":TG_CHAT,"List_Name":LIST_NAME2})["words"]
+
+    for w in words2:
+        table1["words"][w] = {'weight': words2[w]['weight'],'count': words2[w]['count'],'translation':words2[w]["translation"] ,'used_in':words2[w]['used_in']}
+    
+    WordListTable.update_one({"Student":TG_CHAT,"List_Name":LIST_NAME1},{'$set':table1})
+    if dl == True:
+        WordListTable.find_one_and_delete({"Student":TG_CHAT,"List_Name":LIST_NAME2})
+
 
 def get_visulization(TG_CHAT):
     all_data = list(WordListTable.find({"Student":TG_CHAT}))
@@ -171,9 +213,58 @@ def add_to_a_shared_list(TG_CHAT,LIST_NAME):
         shared_list["Student"] = list(set(shared_list["Student"]).append(TG_CHAT))
         WordListTable.update_one({"List_Name":LIST_NAME},{"$set":shared_list})
 
-def get_list_names(TG_CHAT):
+def get_list_names(TG_CHAT,PIC=False):
+    all_data = list(WordListTable.find({"Student":TG_CHAT}))
+    
+    if PIC == True:    
+        df = pd.DataFrame()
+        for i in all_data:
+            df = pd.concat([pd.DataFrame(i),df],axis=0,join="outer")
+        df.reset_index(inplace=True)
+        df["weight"] = [i["weight"] for i in df.words]
+        df["count"] = [1 if i["count"] != 0 else 0 for i in df.words]
+        df["used_in"] = [i["used_in"] for i in df.words]
+        df["len_word"] = [len(i) for i in df["index"]]
+        
+        x = PrettyTable()
+        w = df["weight"].groupby(df["List_Name"][df["count"]!=0]).agg([np.mean])
+        p = df["count"].groupby(df["List_Name"]).mean()
+        v = p[p>0.1]*100
+        all_lists =df.List_Name.value_counts()
+        x.field_names=["Cписок","Пройдено","Оценка","Слов"]
+        len_table = 1
+        for i, k in enumerate(all_lists.keys()):
+            try:   
+                x.add_row([k,f"{np.round(v[k],2)}%",f"{np.round(1-w['mean'][k],2)*100}",f"\t{all_lists[k]}".strip()])
+            except Exception:
+                x.add_row([k,"N/A","N/A",f"\t{all_lists[k]}".strip()])
+            len_table+=1
 
-    return UserTable.find_one({"uid":TG_CHAT})["List_of_Lists"]
+        x.border=False
+        
+        path_to_save ="lists_short.png"
+        sns.set_style(sns_tg)
+        dis = sns.displot(data=df, x="weight", hue="List_Name", kind="kde",height=2,aspect=3,)
+        dis.set(xlim=(0,1))
+        dis.ax.set_xlabel("Оценка")
+        dis.ax.set_ylabel("")
+        sns.move_legend(dis, "lower left", bbox_to_anchor=(0.05, -0.15-len_table*0.1))
+        dis.ax.set_title(x,fontdict={"size":12,"family":"monospace"},x=0.6,y=-1-len_table*0.1)
+        dis.savefig(path_to_save)
+        return path_to_save, [i["List_Name"] for i in all_data]
+    return [i["List_Name"] for i in all_data]
+    
+
+def get_last_list(TG_CHAT):
+
+    LL = UserTable.find_one({"uid":TG_CHAT})["Last_list"]
+    if LL == None:
+        try:
+            return UserTable.find_one({"uid":TG_CHAT})["List_of_Lists"][-1]
+        except Exception:
+            return "У вас нет списков! Добавте список и попробуйте снова."
+    return LL
+        
 
 def rename_list(TG_CHAT,LIST_NAME,NEW_NAME):
 
@@ -199,12 +290,8 @@ def words_delete(TG_CHAT,LIST_NAME,WORDS_D=[]):
 
 def is_user(TG_CHAT):
     """Returns bool"""
-    ut = UserTable.find_one({"uid":TG_CHAT})
+    return UserTable.find_one({"uid":TG_CHAT})
 
-    if ut == {}:
-        return False
-    else:
-        return True
     
 def get_list_id(TG_CHAT,LIST_NAME):
     """Returns _id of a list"""

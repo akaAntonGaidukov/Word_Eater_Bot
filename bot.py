@@ -74,25 +74,29 @@ async def send_welcome(message: types.Message):
     """
     This handler will be called when user sends `/start` command
     """
-    if db.is_user == False:
-        db.new_user(message.from_user.id,message.from_user.full_name)
+    id = message.from_user.id
+    if db.is_user(id) == None:
+        db.new_user(id,message.from_user.full_name)
         await message.answer(
         """Привет я твой помошник в изучении Английского! 
     Ты можешь подгрузить и дополнять списки слов для обучения,
     или для начала попробовать страндртный список при помощи команды /StandartList"""
     )
+        
+    await message.answer("Вы уже являетесь пользователем")
 
 @dp.message_handler(commands=["help"])
-async def send_welcome(message: types.Message):
+async def send_help(message: types.Message,id=None):
     """
     This handler will be called when user sends `/help` command
     """
-    await message.answer(
-        """
-
+    txt ="""
+/Menu      /m - главное меню.
 /NewList  /nl - создать новый список. \nпример /NewList IELTS
 
 /AddToList /add - добавить слова в список. \nпример /AddToList IELTS word1, word2, word3
+
+/MergeLists /ml - совместить два списка. Совмещение происходит в первый список. \nпример /MergeLists IELTS IeltsWriting
 
 /StartList /sl - начать список, название списка указывается через пробел.
 
@@ -112,10 +116,23 @@ async def send_welcome(message: types.Message):
 
 Также вы можете оправлять боту книжки в формате epub. Он достанет оттуда много уникальных слов и добавит их в новый список с названием Ebook (вы также можете добавить свое название в описании под файлом). 
         """
-    )
+    if id == None:
+        await message.answer(txt)
+    else:
+        await bot.send_message(id,text=txt,reply_markup=key_boards.main_menu())
+
+
+@dp.message_handler(commands=["Menu","m"])
+async def main_menu(message: types.Message):
+    """
+    This hadler sends Main menu inline keyboard
+    """
+    await message.answer(text="Главное меню: ",reply_markup=key_boards.main_menu())
+    await message.delete()
+
 
 @dp.message_handler(commands=["er"])
-async def send_welcome(message: types.Message):
+async def send_ER(message: types.Message):
     """
     This handler will save ER message to the queue
     """
@@ -150,7 +167,7 @@ async def add_list(message: types.Message):
     await message.answer(f"Список слов для изучения - {list_name} дополнен.")
 
 @dp.message_handler(commands=["RemoveWord", "rw"])
-async def add_list(message: types.Message):
+async def remove_word(message: types.Message):
     """
     This handler will help user to add words to list
     """
@@ -164,7 +181,7 @@ async def add_list(message: types.Message):
         await message.answer(f"У вас точно есть такой список?")
 
 @dp.message_handler(commands=["ShareList","share"])
-async def add_list(message: types.Message):
+async def share_list(message: types.Message):
     """
     This handler will help user to share their lists
     """
@@ -212,24 +229,73 @@ async def give_choice(message: types.Message):
                 text=t
                 )
             dump_to_log(t)
+
+async def give_choice_restart(id,list_name):
+    """
+    This handler starts a list for user
+    """
+    variants, special_word = db.get_word_list(id,list_name)
+    try:
+        await bot.send_message(
+            chat_id = id,
+            text=f"Пожалуйста выберите правильный перевод <b>{special_word[0]}</b>",
+            reply_markup=key_boards.keybord_answ(variants,special_word,list_name)
+            )
+    except Exception:
             
+            t = f"Произошла ошибка с словами <b>{', '.join(list(variants))}</b>"
+            await bot.send_message(
+                chat_id = id,
+                text=t
+                )
+            dump_to_log(t)
+   
 
 
 @dp.message_handler(commands=["visualize","v","Stat","s"])
-async def get_v(messege: types.Message):
-    
-    uid = messege.from_user.id
-    photo_path,stats = db.get_visulization(uid)
-    photo = open(photo_path, 'rb')
-    await bot.send_photo(chat_id=uid,photo=photo,caption=f"\t    {stats[0]}\n\nВес слов 0.5 - Хорошее знание списка(при условии что количество повторов >1)\n\nКоличество повторов >1 - Список полностью пройден.")
+async def get_v(message: types.Message,id=None):
+    if id == None:
+        uid = message.from_user.id
+        photo_path,stats = db.get_visulization(uid)
+        photo = open(photo_path, 'rb')
+        await bot.send_photo(chat_id=uid,photo=photo,caption=f"\t    {stats[0]}\n\nВес слов 0.5 - Хорошее знание списка(при условии что количество повторов >1)\n\nКоличество повторов >1 - Список полностью пройден.")
+    else:
+        uid = id
+        photo_path,stats = db.get_visulization(uid)
+        photo = open(photo_path, 'rb')
+        await bot.send_photo(chat_id=uid,photo=photo,caption=f"\t    {stats[0]}\n\nВес слов 0.5 - Хорошее знание списка(при условии что количество повторов >1)\n\nКоличество повторов >1 - Список полностью пройден.",reply_markup=key_boards.main_menu())
+
+
 
 @dp.message_handler(commands=["List", "list", "getlist","ls"])
-async def get_l(message: types.Message):
+async def get_l(message: types.Message,id=None):
     """
     This handler will sho user all list in users collection
     """
-    list_names = db.get_list_names(message.from_user.id)
-    await message.answer(f"Списки слов для изучения - {','.join(list_names)}.")
+    if id == None:
+        
+        list_names = db.get_list_names(message.from_user.id)
+        await message.answer(f"Списки слов для изучения - {', '.join(list_names)}.")
+    else:
+        path,list_names = db.get_list_names(id,PIC=True)
+        photo = open(path, 'rb')
+        await bot.send_photo(id,photo=photo,caption="Ваши списки",reply_markup=key_boards.main_menu(preset="List"))        
+
+@dp.message_handler(commands=["MergeLists", "ml"])
+async def rename_l(message: types.Message):
+    """
+    This handler will save ER message to the queue
+    """
+    comand, name1, name2 = message.text.split()
+    id=message.from_user.id
+
+    list_names = db.get_list_names(id)
+    if name1 and name2 in list_names:
+        db.merge_lists(id,name1,name2)
+        await message.answer(f"Списки слов {name2} добавлен в список {name1}.")
+    else: 
+        await bot.send_message(id,f"У вас нет такого списка, проверте правильность написания.\nВаши списки: {','.join(list_names)}")
+
 
 @dp.message_handler(commands=["RenameList", "rl"])
 async def rename_l(message: types.Message):
@@ -264,62 +330,134 @@ async def remove_list(message: types.Message):
 async def send_result(callback: types.CallbackQuery):
     choice,LIST_NAME,correct = callback.data.split(";")
     id = callback.from_user.id
+
+    if choice in ["Restart_List"]:
+        await callback.message.delete()
+        await give_choice_restart(id,LIST_NAME)
+        await callback.answer()
+        
+    elif choice in ["STOP"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Согласен! Отличная работа!😁",reply_markup=key_boards.main_menu())
+        await callback.answer()
+
+    elif choice in ["LIST"]:
+        await callback.message.delete()
+        await get_l(message= None, id=id)
+        await callback.answer()
     
-    if LIST_NAME == "Deafult_list_WaiX4":
-        await callback.answer(text=f"ИИИИиии это.....")
-        if choice == "1":
-            db.word_update(
-            TG_CHAT=id,
-            LIST_NAME=LIST_NAME,
-            word=correct,
-            answer=True,
-            SHARED=True
-            )
-            await bot.send_message(chat_id=id,text=f"Правильный ответ!")
-        else:
-            db.word_update(
-            TG_CHAT=id,
-            LIST_NAME=LIST_NAME,
-            word=correct,
-            answer=False,
-            SHARED=True
-            )
-            await bot.send_message(chat_id=id,text=f"Не правильный ответ!\n Правильный ответ - <b>{', '.join(db.get_translation(id,LIST_NAME,correct))}</b>")
-        await bot.send_message(
-            chat_id = id,
-            text="Еще?",
-            reply_markup=key_boards.Key_Board(["/StandartList","С меня хватит.."])
-            )
+    elif choice in ["STAT"]:
+        await callback.message.delete()
+        await get_v(message= None, id=id)
+        await callback.answer()
+
+    elif choice in ["HELP"]:
+        await callback.message.delete()
+        await send_help(message= None, id=id)
+        await callback.answer()
+
+    elif choice in ["ADDBOOK"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Вы можете добавить книгу в формате .epub отправив ее боту,\nкнижка сохранится с стандартным названием Ebook,обработка займет от 1-10 минут.\nЧтобы сохранить книжку под другим именем впишите его в описании файла при отправке.",reply_markup=key_boards.main_menu())
+        await callback.answer()
+
+    elif choice in ["ADDLIST"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Вы можете добавить свой список для изучения при помощи команды /nl\nПример можете скопировать как шаблон <code>/nl NewList word1,word2,word and word </code>\nЧтобы начать список необходимо хотябы 8 слов в списке",reply_markup=key_boards.main_menu())
+        await callback.answer()
+
+    elif choice in ["CONTINUE","START_LIST"]:
+        await callback.message.delete()
+        list_name =  db.get_last_list(id)
+        await bot.send_message(id,f"Продолжаем список - {list_name}")
+        await give_choice_restart(id,list_name)
+
+    #LIST
+
+    elif choice in ["WORD_STAT"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Эта кнопка еще не готова, sorry.. 💩",reply_markup=key_boards.main_menu(preset="List"))
+        await callback.answer()
+
+    elif choice in ["DELETE_LIST"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Вы можете удалить свой список для изучения при помощи команды /dl\nПример можете скопировать как шаблон <code>/dl NewList</code>",reply_markup=key_boards.main_menu(preset="List"))
+        await callback.answer()
+
+    elif choice in ["MERGE"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Вы можете совместить свои списоки для изучения при помощи команды /ml\nПример можете скопировать как шаблон <code>/ml BigList SmallList</code>",reply_markup=key_boards.main_menu(preset="List"))
+        await callback.answer()
+    
+    elif choice in ["RENAME"]:
+        await callback.message.delete()
+        await bot.send_message(id,"Вы можете переименовать свои списоки для изучения при помощи команды /rl\nПример можете скопировать как шаблон <code>/rl Ebook LOTR</code>",reply_markup=key_boards.main_menu(preset="List"))
+        await callback.answer()
+
+    elif choice in ["MENU"]:
+        await callback.message.delete()
+        await bot.send_message(id,text="Главное меню: ",reply_markup=key_boards.main_menu())
+        await callback.answer()   
+
+    
     else:
-        await callback.answer(text=f"ИИИИиии это.....")
-        if choice == "1":
-            db.word_update(
-            TG_CHAT=id,
-            LIST_NAME=LIST_NAME,
-            word=correct,
-            answer=True
-            )
-            await bot.send_message(chat_id=id,text=f"Правильный ответ!")
-        else:
-            db.word_update(
-            TG_CHAT=id,
-            LIST_NAME=LIST_NAME,
-            word=correct,
-            answer=False)
-            await bot.send_message(chat_id=id,text=f"Не правильный ответ!\n Правильный ответ - <b>{', '.join(db.get_translation(id,LIST_NAME,correct))}</b>")
-        if db.check_avg_weight(callback.from_user.id) == 1:
+        
+        
+        if LIST_NAME == "Deafult_list_WaiX4":
+            await callback.answer(text=f"ИИИИиии это.....")
+            if choice == "1":
+                db.word_update(
+                TG_CHAT=id,
+                LIST_NAME=LIST_NAME,
+                word=correct,
+                answer=True,
+                SHARED=True
+                )
+                await bot.send_message(chat_id=id,text=f"Правильный ответ!")
+            else:
+                db.word_update(
+                TG_CHAT=id,
+                LIST_NAME=LIST_NAME,
+                word=correct,
+                answer=False,
+                SHARED=True
+                )
+                await bot.send_message(chat_id=id,text=f"Не правильный ответ!\n Правильный ответ - <b>{', '.join(db.get_translation(id,LIST_NAME,correct))}</b>")
             await bot.send_message(
-            chat_id = id,
-            text=f"Если хотите повторить нажмите на кнопку в выпадающей клавиатуре",
-            reply_markup=key_boards.Key_Board([f"/StartList {LIST_NAME}","С меня хватит.."])
-            )
+                chat_id = id,
+                text="Еще?",
+                reply_markup=key_boards.Key_Board(["/StandartList","С меня хватит.."])
+                )
         else:
-            await bot.send_message(
-            chat_id = id,
-            text="Еще?",
-            reply_markup=key_boards.Key_Board([f"/StartList {LIST_NAME}","С меня хватит.."])
-            )
-    ReplyKeyboardRemove()
+            await callback.answer(text=f"ИИИИиии это.....")
+            if choice == "1":
+                db.word_update(
+                TG_CHAT=id,
+                LIST_NAME=LIST_NAME,
+                word=correct,
+                answer=True
+                )
+                await bot.send_message(chat_id=id,text=f"Правильный ответ!")
+            else:
+                db.word_update(
+                TG_CHAT=id,
+                LIST_NAME=LIST_NAME,
+                word=correct,
+                answer=False)
+                await bot.send_message(chat_id=id,text=f"Не правильный ответ!\n Правильный ответ - <b>{', '.join(db.get_translation(id,LIST_NAME,correct))}</b>")
+            if db.check_avg_weight(callback.from_user.id) == 1:
+                await bot.send_message(
+                chat_id = id,
+                text=f"Если хотите повторить нажмите на кнопку в выпадающей клавиатуре",
+                reply_markup=key_boards.key_short_options({"Ещё":f"Restart_List;{LIST_NAME};Restart_List"},{"С меня хватит..":"STOP;STOP;STOP"})
+                )
+            else:
+                await bot.send_message(
+                chat_id = id,
+                text="Еще?",
+                reply_markup=key_boards.key_short_options({"Да!":f"Restart_List;{LIST_NAME};Restart_List"},{"С меня хватит..":"STOP;STOP;STOP"})
+                )
+            await callback.answer()
 
 
 # CONTENT HANDLER
