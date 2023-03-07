@@ -5,19 +5,27 @@
 import logging
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardRemove,InputMediaPhoto
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 
 # Methods
 import aspose.words as aw
 from PIL import Image
 import io
 
+
 #py
 import config
 import db
 import nlp
 import key_boards
+import time_job
 
 API_TOKEN = config.BETA_TG_TOKEN
+
+from datetime import datetime
+import signal
+import sys
 
 
 
@@ -27,7 +35,10 @@ logging.basicConfig(level=logging.INFO)
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN,parse_mode="HTML")
 dp = Dispatcher(bot)
-
+# Bot related and midlewares
+scheduler = AsyncIOScheduler(timezone="utc")
+scheduler.add_job(time_job.notify_me, trigger="interval", minutes=50, kwargs={"bot":bot})
+scheduler.start()
 # Functions 
 
 
@@ -356,6 +367,12 @@ async def send_result(callback: types.CallbackQuery):
         await send_help(message= None, id=id)
         await callback.answer()
 
+    elif choice in ["SETTINGS"]:
+        notif, dif = db.check_params(id)
+        await callback.message.delete()
+        await bot.send_message(id,"Настройки:",reply_markup=key_boards.main_menu(preset="Settings",notify=notif,difficulty=dif))
+        await callback.answer()
+
     elif choice in ["ADDBOOK"]:
         await callback.message.delete()
         await bot.send_message(id,"Вы можете добавить книгу в формате .epub отправив ее боту,\nкнижка сохранится с стандартным названием Ebook,обработка займет от 1-10 минут.\nЧтобы сохранить книжку под другим именем впишите его в описании файла при отправке.",reply_markup=key_boards.main_menu())
@@ -398,6 +415,28 @@ async def send_result(callback: types.CallbackQuery):
         await callback.message.delete()
         await bot.send_message(id,text="Главное меню: ",reply_markup=key_boards.main_menu())
         await callback.answer()   
+
+    #SETTINGS
+
+    elif choice in ["NOTIFICATION"]:
+        db.change_params(id,notify=True)
+        notif, dif = db.check_params(id)
+        await callback.message.delete()
+        await bot.send_message(id,"Настройки:",reply_markup=key_boards.main_menu(preset="Settings",notify=notif,difficulty=dif))
+        await callback.answer()
+
+    elif choice in ["DIFFICULTY"]:
+        db.change_params(id,dif=True)
+        notif, dif = db.check_params(id)
+        await callback.message.delete()
+        await bot.send_message(id,"Настройки:",reply_markup=key_boards.main_menu(preset="Settings",notify=notif,difficulty=dif))
+        await callback.answer()
+
+    elif choice in ["DEL_ACC"]:
+        notif, dif = db.check_params(id)
+        await callback.message.delete()
+        await bot.send_message(id,"Я думаю вам рано сдаватся!",reply_markup=key_boards.main_menu(preset="Settings",notify=notif,difficulty=dif))
+        await callback.answer()
 
     
     else:
@@ -507,4 +546,17 @@ async def not_a_comand(message: types.Message):
 
 
 if __name__ == '__main__':
+
     executor.start_polling(dp, skip_updates=False)
+    
+
+#     @dp.message_handler()
+# async def notify_timing(x):
+#     minutes=0.5
+
+#     notif_list = db.who_notify()
+#     if len(notif_list) != 0:
+#         for i in notif_list:
+#             await bot.send_message(i,text="Привет, got time for English?")
+#     Timer(10,dp.async_task(notify_timing(0))).start()
+    

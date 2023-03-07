@@ -81,14 +81,14 @@ def key_short_options(opt1={"Buttname":"Buttcallback"},opt2={"Buttname":"Buttcal
 
     return sikm
 
-def main_menu(LIST_NAME="KB",preset=None,
+def main_menu(LIST_NAME="KB",preset=None,notify=None,difficulty=None,
         top_row = {
     "bt1":["Мои списки","LIST"],
     "bt2":["Моя Статистика","STAT"]
         },
         middle_row = {
     "bt1":["Помощь","HELP"],
-    "bt2":["Продолжить изучение","CONTINUE"]
+    "bt2":["Настройки","SETTINGS"]
         },
         bot_row = {
     "bt1":["Добавить книгу","ADDBOOK"],
@@ -110,6 +110,22 @@ def main_menu(LIST_NAME="KB",preset=None,
             }
         bot_row = {
             "bt1":["Переименовать","RENAME"],
+            "bt2":["НАЗАД","MENU"]
+            }
+        
+    #Settings
+
+    if preset == "Settings":
+        top_row = {
+            "bt1":["Уведомления","NOTIFICATION"],
+            "bt2":[notify,"NOTIFICATION"]
+            }
+        middle_row = {
+            "bt1":["Сложность","DIFFICULTY"],
+            "bt2":[difficulty,"DIFFICULTY"]
+            }
+        bot_row = {
+            "bt1":["Удалить акаунт","DEL_ACC"],
             "bt2":["НАЗАД","MENU"]
             }
     

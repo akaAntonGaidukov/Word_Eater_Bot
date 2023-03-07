@@ -21,9 +21,9 @@ def get_vocabluary(TG_CHAT,LIST_NAME="Ebook"):
         if token.ent_iob != 0 and token.ent_type_ == "PERSON":
             return "[REDACTED] "
         elif token.ent_iob != 0 and token.ent_type_ == "GPE":
-            return "[RED] "
+            return "[REDACTED] "
         elif token.ent_iob != 0 and token.ent_type_ == "ORG":
-            return "[REDACT] "
+            return "[REDACTED] "
         else:
             return token.text
 
@@ -49,7 +49,8 @@ def get_vocabluary(TG_CHAT,LIST_NAME="Ebook"):
     def preprocess_txt(text):
 
         # Удаляет именованные сущности
-        text = re.sub(fr'[REDACTED]', '', text)
+        text = re.sub(fr'\[REDACTED\]', '', text)
+        text = re.sub(fr'\n', '', text)
 
         # Оставляет только англ символы
         eng = re.compile('[a-zA-Z]+')
@@ -95,7 +96,8 @@ def get_vocabluary(TG_CHAT,LIST_NAME="Ebook"):
     # Подбор слов от кол-ва процентов
     pro = int(len(sorted_text)*(1/(len(sorted_text)+1000)*100000)/100)
     random_text = list(set(random.sample(sorted_text, k=pro)))
-
+    if len(random_text)>550:
+        random_text = random_text[:550]
     db.new_list(TG_CHAT,LIST_NAME,random_text)
 
     return len(random_text)

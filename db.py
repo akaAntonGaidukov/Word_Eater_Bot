@@ -12,6 +12,7 @@ import asyncio
 from prettytable import PrettyTable
 from PIL import Image
 import io
+from statistics import mean
 
 import atranslator
 #Connnection
@@ -303,5 +304,57 @@ def get_translation(TG_CHAT,LIST_NAME,WORD):
 
     return WordListTable.find_one({'Student': TG_CHAT,"List_Name":LIST_NAME})['words'][WORD]["translation"]
 
+def check_params(TG_CHAT):
+    table = UserTable.find_one({"uid":TG_CHAT})
 
+    return table["Notifications"], table["Difficulty"]
+
+def change_params(TG_CHAT,notify=None,dif=None):
+
+    if notify != None:
+
+        n =  UserTable.find_one({"uid":TG_CHAT})["Notifications"]
+        x = abs(n-1)
+        UserTable.update_one({"uid":TG_CHAT},{"$set":{"Notifications":x}})
+
+    if dif != None:
+
+        d = UserTable.find_one({"uid":TG_CHAT})["Difficulty"]
+        if d < 3:
+            d+=1
+        else:
+            d=1
+        UserTable.update_one({"uid":TG_CHAT},{"$set":{"Difficulty":d}})
+
+def who_notify():
+    CHATS = [[i["uid"],i["Last_notify"],i["Notifications"]] for i in [*UserTable.find({})]]
+    notify_time_user = []
+    for id in CHATS:
+        datetimeList =[i["Last_used_in"] for i in [*WordListTable.find({"Student":id[0]})]]
+        datetimeList = [datetime.datetime(year=2000,month=1,day=1,hour=i.hour,minute=i.minute).timestamp() for i in datetimeList]
+        notify_time = datetime.datetime.fromtimestamp(mean(datetimeList)).time()
+        if id[1] != datetime.datetime.utcnow().date() and id[2] == 1:
+            notify_time_user.append({id[0]:notify_time})
+            
+
+    send_que=[]
+
+    for k in notify_time_user:
+        t =[*k.values()][0]
+
+        time_now = datetime.datetime.utcnow()
+        time_plus30 = time_now+datetime.timedelta(minutes=30)
+        time_minus30 = time_now-datetime.timedelta(minutes=30)
+        if time_minus30.time()<t<time_plus30.time():
+            print("Yes")
+
+            send_que.append([*k.keys()][0])
+        else: print("No")
+    print(send_que)
+
+    return send_que
+
+def update_notif(TG_CHAT):
+    time_now = datetime.datetime.utcnow()
+    UserTable.update_one({"uid":TG_CHAT},{"$set":{"Last_notify":time_now}})
 
